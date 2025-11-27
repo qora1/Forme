@@ -1,0 +1,7 @@
+services:
+  - type: web
+    name: 100k-automation
+    env: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
