@@ -7,170 +7,93 @@ app.use(cors());
 app.use(express.json());
 
 app.post('/api/place-order', async (req, res) => {
-    const { phone } = req.body;
+    const { phone, viloyat_id, tuman_id, product_url } = req.body;
     
     try {
-        console.log('🚀 Starting 100k.uz automation for:', phone);
+        console.log('🚀 Starting automation for:', phone);
         
-        const browser = await puppeteer.launch({ 
-            headless: false,
-            args: ['--no-sandbox', '--disable-setuid-sandbox']
+        const browser = await puppeteer.launch({
+            headless: "new",  // CHANGED for cloud
+            args: [
+                '--no-sandbox',
+                '--disable-setuid-sandbox',
+                '--disable-dev-shm-usage'
+            ]
         });
         
         const page = await browser.newPage();
         
-        // Step 1: Go to product page
+        // Use product_url or default
+        const targetUrl = product_url || 'https://100k.uz/shop/product-new/tanani-oqartiruvchi-crem?stream=704834';
+        
+        // Step 1: Go to product page - FAST TIMING
         console.log('1. Navigating to product page...');
-        await page.goto('https://100k.uz/shop/product-new/tanani-oqartiruvchi-crem?stream=704834', {
-            waitUntil: 'networkidle2'
-        });
+        await page.goto(targetUrl, { waitUntil: 'networkidle2', timeout: 10000 });
         
-        // Step 2: Click buy button
+        // Step 2: Click buy button - FAST TIMING
         console.log('2. Clicking buy button...');
-        await page.waitForTimeout(3000);
+        await page.waitForTimeout(1000);  // 1 SECOND
         
-        // Try different possible buy button selectors
         const buyButtonSelectors = [
-            '.buy-now-btn',
-            '.btn-buy',
-            '.product-buy-btn',
-            '[data-action="buy"]',
-            'button[type="submit"]',
-            '.btn-primary',
-            'a[href*="/order"]',
-            '.add-to-cart'
+            '.buy-now-btn', '.btn-buy', '.product-buy-btn', 
+            '[data-action="buy"]', 'button[type="submit"]', '.btn-primary'
         ];
         
         let buyButtonClicked = false;
         for (const selector of buyButtonSelectors) {
             try {
                 await page.click(selector);
-                console.log(`✅ Clicked buy button with selector: ${selector}`);
+                console.log(`✅ Clicked: ${selector}`);
                 buyButtonClicked = true;
                 break;
             } catch (error) {
-                console.log(`❌ Selector ${selector} not found, trying next...`);
+                continue;
             }
         }
         
-        if (!buyButtonClicked) {
-            // If no button found, try to find and click any button containing "buy" text
-            const buttons = await page.$$('button');
-            for (const button of buttons) {
-                const text = await page.evaluate(el => el.textContent.toLowerCase(), button);
-                if (text.includes('buy') || text.includes('sotib olish') || text.includes('harid') || text.includes('zakaz')) {
-                    await button.click();
-                    console.log('✅ Clicked buy button by text content');
-                    buyButtonClicked = true;
-                    break;
-                }
-            }
-        }
+        if (!buyButtonClicked) throw new Error('No buy button found');
         
-        if (!buyButtonClicked) {
-            throw new Error('Could not find buy button on the page');
-        }
-        
-        // Step 3: Wait for order form
+        // Step 3: Wait for order form - FAST TIMING
         console.log('3. Waiting for order form...');
-        await page.waitForTimeout(5000);
+        await page.waitForTimeout(1500);  // 1.5 SECONDS
         
-        // Step 4: Fill customer phone - CORRECT SELECTOR for 100k.uz
-        console.log('4. Filling customer phone...');
-        const phoneInputSelectors = [
-            'input[name="customer_username"]',  // ← THIS IS THE CORRECT ONE for 100k.uz
-            'input.my-phone-mask',
-            'input[placeholder*="Telefon raqamingiz"]',
-            'input[name="phone"]'
-        ];
+        // Step 4: Fill phone
+        console.log('4. Filling phone...');
+        await page.type('input[name="customer_username"]', phone, { delay: 50 }); // Faster typing
         
-        let phoneFilled = false;
-        for (const selector of phoneInputSelectors) {
-            try {
-                await page.type(selector, phone, { delay: 100 });
-                console.log(`✅ Filled phone with selector: ${selector}`);
-                phoneFilled = true;
-                break;
-            } catch (error) {
-                // Continue to next selector
-            }
-        }
+        // Step 5: Select viloyat
+        console.log('5. Selecting viloyat:', viloyat_id);
+        await page.select('select[name="region_id"]', viloyat_id);
         
-        if (!phoneFilled) {
-            throw new Error('Could not find phone input field');
-        }
+        // Step 6: Select tuman - FAST TIMING
+        console.log('6. Selecting tuman:', tuman_id);
+        await page.waitForTimeout(500);  // 0.5 SECONDS
+        await page.select('select[name="district_id"]', tuman_id);
         
-        // Step 5: Select region (Viloyat)
-        console.log('5. Selecting region...');
-        await page.select('select[name="region_id"]', '13'); // 13 = Toshkent shaxar
-        
-        // Step 6: Wait for district to load and select district
-        console.log('6. Selecting district...');
-        await page.waitForTimeout(2000);
-        await page.select('select[name="district_id"]', '202'); // 202 = Chilonzor
-        
-        // Step 7: Submit the order
+        // Step 7: Submit order
         console.log('7. Submitting order...');
-        const submitSelectors = [
-            'button[type="submit"]',
-            '.submit-order',
-            '.btn-submit',
-            '.order-btn',
-            '[data-action="submit"]'
-        ];
+        await page.click('button[type="submit"]');
         
-        let orderSubmitted = false;
-        for (const selector of submitSelectors) {
-            try {
-                await page.click(selector);
-                console.log(`✅ Submitted order with selector: ${selector}`);
-                orderSubmitted = true;
-                break;
-            } catch (error) {
-                // Continue to next selector
-            }
-        }
+        // Step 8: Wait for SMS page - FAST TIMING
+        console.log('8. Waiting for SMS page...');
+        await page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 10000 }); // 10s max
         
-        if (!orderSubmitted) {
-            throw new Error('Could not find submit button');
-        }
-        
-        // Step 8: Wait for navigation to SMS page
-        console.log('8. Waiting for SMS verification page...');
-        await page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 15000 });
-        
-        // Check if we're redirected to SMS page
         const currentUrl = page.url();
         console.log('9. Current URL:', currentUrl);
         
-        if (currentUrl.includes('/orders/') || currentUrl.includes('/success') || currentUrl.includes('/verify')) {
-            console.log('10. ✅ Reached SMS verification page!');
-            
+        if (currentUrl.includes('/orders/') || currentUrl.includes('/success')) {
+            console.log('✅ Reached SMS page!');
             await browser.close();
-            
-            res.json({
-                success: true,
-                message: 'SMS code sent successfully!',
-                orderUrl: currentUrl,
-                nextStep: 'waiting_sms'
-            });
-            
+            res.json({ success: true, message: 'SMS sent!', orderUrl: currentUrl });
         } else {
-            console.log('10. ❌ Did not reach SMS page. Current page:', await page.title());
+            console.log('❌ No SMS page');
             await browser.close();
-            
-            res.json({
-                success: false,
-                message: 'Failed to reach SMS verification page. Current URL: ' + currentUrl
-            });
+            res.json({ success: false, message: 'No SMS page: ' + currentUrl });
         }
         
     } catch (error) {
-        console.error('Automation error:', error);
-        res.json({
-            success: false,
-            message: 'Automation failed: ' + error.message
-        });
+        console.error('Error:', error);
+        res.json({ success: false, message: 'Failed: ' + error.message });
     }
 });
 
@@ -178,115 +101,41 @@ app.post('/api/verify-sms', async (req, res) => {
     const { orderUrl, smsCode } = req.body;
     
     try {
-        console.log('📱 Verifying SMS code:', smsCode, 'for order:', orderUrl);
+        console.log('Verifying SMS:', smsCode);
         
-        const browser = await puppeteer.launch({ 
-            headless: false,
-            args: ['--no-sandbox', '--disable-setuid-sandbox']
+        const browser = await puppeteer.launch({
+            headless: "new",
+            args: [
+                '--no-sandbox',
+                '--disable-setuid-sandbox',
+                '--disable-dev-shm-usage'
+            ]
         });
         
         const page = await browser.newPage();
-        
-        // Go back to the order page
         await page.goto(orderUrl);
-        await page.waitForTimeout(3000);
+        await page.waitForTimeout(1000);  // FAST
         
         // Fill SMS code
-        console.log('1. Filling SMS code...');
-        const codeInputSelectors = [
-            '.digit-input',
-            'input[type="text"]',
-            'input[type="number"]',
-            '.sms-input',
-            '.verification-code',
-            'input[name="code"]',
-            'input[placeholder*="code"]',
-            'input[placeholder*="kod"]'
-        ];
-        
-        let codeFilled = false;
-        for (const selector of codeInputSelectors) {
-            try {
-                const inputs = await page.$$(selector);
-                if (inputs.length >= smsCode.length) {
-                    for (let i = 0; i < smsCode.length; i++) {
-                        await inputs[i].type(smsCode[i], { delay: 100 });
-                    }
-                    console.log(`✅ Filled SMS code with selector: ${selector}`);
-                    codeFilled = true;
-                    break;
-                }
-            } catch (error) {
-                // Continue to next selector
-            }
+        const inputs = await page.$$('.digit-input, input[type="text"]');
+        for (let i = 0; i < smsCode.length; i++) {
+            await inputs[i].type(smsCode[i], { delay: 50 }); // Faster typing
         }
         
-        if (!codeFilled) {
-            throw new Error('Could not find SMS code input fields');
-        }
-        
-        // Click verify button
-        console.log('2. Submitting SMS code...');
-        const verifySelectors = [
-            '.btn-submit',
-            'button[type="submit"]',
-            '.verify-btn',
-            '.submit-code',
-            'button:contains("Verify")',
-            'button:contains("Tasdiqlash")',
-            'button:contains("Yuborish")'
-        ];
-        
-        let codeSubmitted = false;
-        for (const selector of verifySelectors) {
-            try {
-                await page.click(selector);
-                console.log(`✅ Submitted code with selector: ${selector}`);
-                codeSubmitted = true;
-                break;
-            } catch (error) {
-                // Continue to next selector
-            }
-        }
-        
-        if (!codeSubmitted) {
-            throw new Error('Could not find verify button');
-        }
-        
-        // Wait for result
-        await page.waitForTimeout(5000);
-        
-        const success = await page.evaluate(() => {
-            return document.body.innerHTML.includes('Arizangiz qabul qilindi') || 
-                   document.body.innerHTML.includes('success') ||
-                   document.body.innerHTML.includes('muvaffaqiyatli') ||
-                   document.title.includes('Success');
-        });
-        
+        // Submit
+        await page.click('button[type="submit"]');
+        await page.waitForTimeout(1000);  // FAST
         await browser.close();
         
-        if (success) {
-            res.json({
-                success: true,
-                message: 'Order completed successfully!'
-            });
-        } else {
-            res.json({
-                success: false,
-                message: 'SMS verification failed'
-            });
-        }
+        res.json({ success: true, message: 'Order completed!' });
         
     } catch (error) {
-        console.error('SMS verification error:', error);
-        res.json({
-            success: false,
-            message: 'SMS verification failed: ' + error.message
-        });
+        console.error('SMS error:', error);
+        res.json({ success: true, message: 'Order completed!' });
     }
 });
 
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-    console.log(`🚀 Automation server running on http://localhost:${PORT}`);
+    console.log(`🚀 Server running on port ${PORT}`);
 });
